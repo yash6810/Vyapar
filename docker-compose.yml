@@ -1,0 +1,46 @@
+version: '3.8'
+services:
+  main:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./vyapar.db:/app/vyapar.db
+    restart: always
+    depends_on:
+      - asr
+      - intent
+      - hf
+      - rag
+  asr:
+    build:
+      context: .
+      dockerfile: backend/asr.Dockerfile
+    ports:
+      - "8001:8001"
+    restart: always
+  intent:
+    build:
+      context: .
+      dockerfile: backend/intent.Dockerfile
+    ports:
+      - "8002:8002"
+    restart: always
+  hf:
+    build:
+      context: .
+      dockerfile: backend/hf.Dockerfile
+    ports:
+      - "8080:8080"
+    restart: always
+    environment:
+      - HF_MODEL=distilgpt2
+  rag:
+    build:
+      context: .
+      dockerfile: backend/rag.Dockerfile
+    ports:
+      - "8003:8003"
+    restart: always

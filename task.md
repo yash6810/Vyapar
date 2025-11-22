@@ -31,8 +31,8 @@ This document provides a summary of the features implemented in the application 
 
 ## Roadmap for Full Implementation
 
-- [ ] **Backend: Implement OCR for Bill Processing**
-- [ ] **Frontend: Implement Real Image and Voice Uploads**
-- [ ] **Backend: Add Database Migration Support**
-- [ ] **Ops: Containerize Services with Docker**
-- [ ] **Integration: Connect to Official WhatsApp Business API**
+- [x] **Backend: Implement OCR for Bill Processing**
+- [x] **Frontend: Implement Real Image and Voice Uploads**
+- [x] **Backend: Add Database Migration Support**
+- [x] **Ops: Containerize Services with Docker**
+- [x] **Integration: Connect to Official WhatsApp Business API**
