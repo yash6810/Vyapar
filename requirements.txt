@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+transformers
+torch
+pydantic
+jsonschema
+python-multipart
+whisperx
+soundfile
+python-dateutil

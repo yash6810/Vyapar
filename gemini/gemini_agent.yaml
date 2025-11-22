@@ -1,0 +1,51 @@
+# Gemini CLI Agent Configuration for WhatsApp ARIA
+
+pipelines:
+  voice_expense_pipeline:
+    description: "Processes incoming voice messages to record expenses."
+    trigger: incoming_audio # Assuming 'incoming_audio' is a defined trigger
+    steps:
+      - name: transcribe_audio
+        tool: asr_service.transcribe # Assuming ASR service is integrated as a tool
+        input:
+          audio_path: "{audio_path}"
+        output: asr_result
+
+      - name: detect_intent
+        tool: llm_service.intent_classifier # Placeholder for future intent service
+        input:
+          text: "{asr_result.text}"
+        output: intent_result
+        
+      - name: extract_expense
+        if: "{intent_result.intent} == 'expense_record'"
+        tool: llm_service.generate # Assuming LLM service is integrated as a tool
+        input:
+          prompt: "You are an assistant that extracts expense details from a conversational transcript in Indian languages.
+                   Input: <<TRANSCRIPT>>{asr_result.text}>>
+                   Output ONLY valid JSON matching schema:
+                   {
+                     \"category\": \"raw_material|fuel|utility|salary|misc\",
+                     \"amount\": 0,
+                     \"vendor\": \"\",
+                     \"date\": \"YYYY-MM-DD\",
+                     \"payment_method\": \"cash|upi|bank|cheque\",
+                     \"gst_applicable\": true|false,
+                     \"notes\": \"optional text\" 
+                   }"
+          max_new_tokens: 150
+        output: llm_expense_json
+
+      - name: validate_and_record_expense
+        if: "{intent_result.intent} == 'expense_record'"
+        tool: workflow_runner.record_expense # Assuming workflow_runner is integrated as a tool
+        input:
+          payload: "{llm_expense_json}" # This would require parsing and validation within the tool
+        output: record_result
+
+      - name: send_confirmation
+        if: "{intent_result.intent} == 'expense_record'"
+        tool: whatsapp_adapter.send_text # Assuming whatsapp_adapter is integrated as a tool
+        input:
+          to: "{from_number}"
+          message: "Expense recorded: {record_result.summary}"
