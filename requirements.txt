@@ -3,8 +3,14 @@ uvicorn
 transformers
 torch
 pydantic
+pydantic-settings
 jsonschema
 python-multipart
 whisperx
 soundfile
 python-dateutil
+sqlalchemy
+python-jose[cryptography]
+bcrypt
+easyocr
+alembic

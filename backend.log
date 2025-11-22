@@ -1,0 +1,12 @@
+2025-11-22 13:25:49,417 - WARNING - [674030bd-4cf3-4aae-8ca5-ce9b5a51d65a] - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "C:\Users\Aayush\Vyapar\.venv\Lib\site-packages\passlib\handlers\bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2025-11-22 13:37:09,669 - INFO - [8defedae-27b0-4cb5-b8fb-a2f4b1aa60d2] - Received text from yashupadhyay481@gmail.com: make a expense recording for 2200 for food
+2025-11-22 13:37:13,747 - ERROR - [8defedae-27b0-4cb5-b8fb-a2f4b1aa60d2] - Intent classifier service unavailable: HTTPConnectionPool(host='localhost', port=8002): Max retries exceeded with url: /classify (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000026139840D70>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))
+2025-11-22 13:37:27,787 - INFO - [0b799b71-5503-4b8e-86e0-8aa5e1e78c3a] - Received text from yashupadhyay481@gmail.com: hi
+2025-11-22 13:37:31,871 - ERROR - [0b799b71-5503-4b8e-86e0-8aa5e1e78c3a] - Intent classifier service unavailable: HTTPConnectionPool(host='localhost', port=8002): Max retries exceeded with url: /classify (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x000002613988B250>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))
+2025-11-22 15:04:51,866 - INFO - [61cfc6c0-42ac-446d-b179-77f05615ffe3] - Received text from yashupadhyay481@gmail.com: hi
+2025-11-22 15:04:57,019 - INFO - [61cfc6c0-42ac-446d-b179-77f05615ffe3] - Intent: fallback
