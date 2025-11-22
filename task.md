@@ -1,8 +1,8 @@
 # Task Summary
 
-This document provides a summary of the features implemented in the application and instructions on how to run it.
+This document provides a summary of the features implemented in the application and the future roadmap.
 
-## Completed Tasks
+## Completed Backend & Architecture Tasks
 
 - [x] **Modular Architecture:** The application has been refactored into a modular architecture with separate services for different functionalities like ASR, intent classification, and the main backend.
 - [x] **AI-based Intent Detection:** The intent detection has been upgraded from a rule-based system to an AI-based system that uses a language model for more accurate and flexible intent classification.
@@ -19,97 +19,20 @@ This document provides a summary of the features implemented in the application 
 - [x] **Search by Vendor:** Added the ability to search for expenses and invoices by vendor.
 - [x] **Tagging:** Added tagging functionality for expenses and invoices.
 
-## How to Run
+## Completed UI/UX Enhancement Sprint
 
-1.  **Install Dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+- [x] **Implement Menu State:** Added a quick-actions menu to the chat interface.
+- [x] **Implement Loading State:** Added a "Bot is typing..." indicator for better user feedback during processing.
+- [x] **Implement Structured Cards:** Created a card component to display summaries in a structured, visually appealing format.
+- [x] **Implement Image Upload UI:** Added the frontend flow for image upload, preview, and confirmation.
+- [x] **Enhance Error Messages:** Implemented specific, user-friendly error messages for authentication, network, and server issues.
+- [x] **Add Logout Button:** Added a logout button to the chat header for easy session management.
+- [x] **Redesign Auth Pages:** Overhauled the Login and Register pages with a modern and professional UI.
 
-2.  **Run the Services:**
-    Open four terminals and run the following commands in each terminal:
+## Roadmap for Full Implementation
 
-    -   **HF Server:**
-        ```bash
-        python backend/hf_server.py
-        ```
-
-    -   **ASR Service:**
-        ```bash
-        python backend/asr_service.py
-        ```
-
-    -   **Intent Classifier Service:**
-        ```bash
-        python backend/intent_classifier.py
-        ```
-
-    -   **Backend Service:**
-        ```bash
-        uvicorn backend.main:app --reload --port 8000
-        ```
-
-## API Endpoints
-
--   **POST /webhook/audio:**
-    -   **Description:** This is the main endpoint for processing audio messages. It takes an audio file and a `from_number` as input, transcribes the audio, detects the intent, and then processes the request based on the intent.
-    -   **Example:**
-        ```bash
-        curl -X POST "http://localhost:8000/webhook/audio?from_number=%2B911234567890" -F "audio=@tests/samples/expense_hindi_01.mp3"
-        ```
-
--   **GET /health:**
-    -   **Description:** This endpoint returns the status of the application and its dependent services.
-    -   **Example:**
-        ```bash
-        curl -X GET "http://localhost:8000/health"
-        ```
-
--   **GET /expenses:**
-    -   **Description:** This endpoint returns a list of expenses for a specific date range, optionally filtered by vendor.
-    -   **Example:**
-        ```bash
-        curl -X GET "http://localhost:8000/expenses?start_date=2025-11-20&end_date=2025-11-21&vendor=YourVendorName"
-        ```
-
--   **GET /invoices:**
-    -   **Description:** This endpoint returns a list of invoices for a specific date range, optionally filtered by vendor.
-    -   **Example:**
-        ```bash
-        curl -X GET "http://localhost:8000/invoices?start_date=2025-11-20&end_date=2025-11-21&vendor=YourVendorName"
-        ```
-
--   **GET /expenses/summary/daily:**
-    -   **Description:** This endpoint returns a daily summary of expenses, grouped by currency.
-    -   **Example:**
-        ```bash
-        curl -X GET "http://localhost:8000/expenses/summary/daily"
-        ```
-
--   **GET /expenses/summary/monthly:**
-    -   **Description:** This endpoint returns a monthly summary of expenses, grouped by currency.
-    -   **Example:**
-        ```bash
-        curl -X GET "http://localhost:8000/expenses/summary/monthly?year=2025&month=11"
-        ```
-
--   **GET /expenses/summary/yearly:**
-    -   **Description:** This endpoint returns a yearly summary of expenses, grouped by currency.
-    -   **Example:**
-        ```bash
-        curl -X GET "http://localhost:8000/expenses/summary/yearly?year=2025"
-        ```
-
--   **GET /invoices/summary/monthly:**
-    -   **Description:** This endpoint returns a monthly summary of invoices, grouped by currency.
-    -   **Example:**
-        ```bash
-        curl -X GET "http://localhost:8000/invoices/summary/monthly?year=2025&month=11"
-        ```
-
--   **GET /invoices/summary/yearly:**
-    -   **Description:** This endpoint returns a yearly summary of invoices, grouped by currency.
-    -   **Example:**
-        ```bash
-        curl -X GET "http://localhost:8000/invoices/summary/yearly?year=2025"
-        ```
+- [ ] **Backend: Implement OCR for Bill Processing**
+- [ ] **Frontend: Implement Real Image and Voice Uploads**
+- [ ] **Backend: Add Database Migration Support**
+- [ ] **Ops: Containerize Services with Docker**
+- [ ] **Integration: Connect to Official WhatsApp Business API**
