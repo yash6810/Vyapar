@@ -1,0 +1,22 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*cpython-313.pyc
+
+# Database files
+*.db
+*.sqlite3
+
+# Virtual Environment
+.venv/
+
+# Node.js
+frontend/node_modules/
+frontend/build/
+
+# Temporary files
+asr_service.log
+backend.log
+
+# Reference clone folder
+vyaparai_whatsapp_clone/

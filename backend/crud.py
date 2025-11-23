@@ -32,6 +32,14 @@ def get_expenses(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Expense).offset(skip).limit(limit).all()
 
 
+def get_expenses_by_date_range(db: Session, user_id: int, start_date: str, end_date: str):
+    return db.query(models.Expense).filter(
+        models.Expense.owner_id == user_id,
+        models.Expense.date >= start_date,
+        models.Expense.date <= end_date
+    ).all()
+
+
 def create_expense(db: Session, expense: schemas.ExpenseCreate, user_id: int):
     db_expense = models.Expense(**expense.dict(), owner_id=user_id)
     db.add(db_expense)

@@ -1,10 +1,9 @@
 # Intent classifier microservice
 from fastapi import FastAPI
 from pydantic import BaseModel
-import requests
+import logging
 
 app = FastAPI()
-HF_URL = 'http://localhost:8080/generate'
 
 class ClassifyRequest(BaseModel):
     text: str
@@ -12,23 +11,21 @@ class ClassifyRequest(BaseModel):
 @app.post('/classify')
 async def classify(req: ClassifyRequest):
     text = req.text.lower()
-    prompt = f"""You are an intent classifier. Classify the following text into one of these categories: expense_record, invoice_create, gst_query, fallback.
-    Text: "{text}"
-    Intent:"""
     
-    resp = requests.post(HF_URL, json={'prompt': prompt, 'max_new_tokens': 10})
-    llm_text = resp.json().get('text','')
-    
-    # The model might return the prompt plus the intent, so we extract the last line
-    intent = llm_text.splitlines()[-1].replace('Intent:','').strip()
-
-    # Basic validation to ensure the intent is one of the allowed values
-    if intent not in ['expense_record', 'invoice_create', 'gst_query', 'fallback']:
+    # Keyword-based intent classification for reliability
+    if any(keyword in text for keyword in ["gst", "tax", "hsn", "invoice fields", "input tax credit"]):
+        intent = 'gst_query'
+    elif any(keyword in text for keyword in ["invoice for", "bill to"]):
+        intent = 'invoice_create'
+    elif any(keyword in text for keyword in ["spent", "paid", "expense of", "bought"]):
+        intent = 'expense_record'
+    else:
         intent = 'fallback'
 
+    logging.info(f"Classified '{text}' as '{intent}'")
     return {'intent': intent}
 
 if __name__ == '__main__':
     import uvicorn
+    logging.basicConfig(level=logging.INFO)
     uvicorn.run('intent_classifier:app', host='0.0.0.0', port=8002)
-

@@ -1,40 +1,28 @@
 import React from 'react';
-import './SummaryCard.css';
 
-function SummaryCard({ data }) {
+// A simple card for displaying monthly summaries, styled to fit the new UI
+export default function SummaryCard({ data }) {
+  const breakdown = data.categoryBreakdown || {};
   return (
-    <div className="summary-card">
-      <div className="summary-card-header">
-        {data.title}
+    <div className="summary-card" style={{ padding: '10px', border: '1px solid #eee', borderRadius: '8px', background: '#f9f9f9' }}>
+      <h4 style={{ marginTop: 0, marginBottom: '10px', borderBottom: '1px solid #ddd', paddingBottom: '8px' }}>{data.title}</h4>
+      <div style={{ marginBottom: '8px' }}>
+        <strong>Total Spend:</strong> {data.totalSpend}
       </div>
-      <div className="summary-card-body">
-        <div className="summary-item">
-          <span className="summary-label">Total Spend:</span>
-          <span className="summary-value">{data.totalSpend}</span>
-        </div>
-        <div className="summary-item">
-          <span className="summary-label">Top Vendors:</span>
-          <ul className="summary-list">
-            {data.topVendors.map((vendor, index) => (
-              <li key={index}>{vendor}</li>
-            ))}
-          </ul>
-        </div>
-        <div className="summary-item">
-          <span className="summary-label">GST Input:</span>
-          <span className="summary-value">{data.gstInput}</span>
-        </div>
-        <div className="summary-item">
-          <span className="summary-label">Category Breakdown:</span>
-          <ul className="summary-list">
-            {Object.entries(data.categoryBreakdown).map(([category, amount]) => (
-              <li key={category}>{category}: {amount}</li>
-            ))}
-          </ul>
-        </div>
+      <div style={{ marginBottom: '8px' }}>
+        <strong>GST Input:</strong> {data.gstInput}
+      </div>
+      <div style={{ marginBottom: '8px' }}>
+        <strong>Top Vendors:</strong> {data.topVendors?.join(', ')}
+      </div>
+      <div>
+        <strong>Breakdown:</strong>
+        <ul style={{ margin: 0, paddingLeft: '20px' }}>
+          {Object.entries(breakdown).map(([category, amount]) => (
+            <li key={category}>{category}: {amount}</li>
+          ))}
+        </ul>
       </div>
     </div>
   );
 }
-
-export default SummaryCard;

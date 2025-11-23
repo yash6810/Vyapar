@@ -19,6 +19,15 @@ from typing import Optional
 from datetime import datetime, date, timedelta
 import easyocr
 import io
+from contextvars import ContextVar
+
+# Context variable to hold the request ID
+request_id_var: ContextVar[Optional[str]] = ContextVar("request_id", default=None)
+
+class RequestIdFilter(logging.Filter):
+    def filter(self, record):
+        record.request_id = request_id_var.get() or "startup"
+        return True
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -26,10 +35,16 @@ models.Base.metadata.create_all(bind=engine)
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - [%(request_id)s] - %(message)s')
 handler = logging.StreamHandler()
 handler.setFormatter(formatter)
+handler.addFilter(RequestIdFilter())
 file_handler = logging.FileHandler("backend.log")
 file_handler.setFormatter(formatter)
+file_handler.addFilter(RequestIdFilter())
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+# Remove existing handlers before adding new ones to avoid duplication
+for h in logger.handlers:
+    logger.removeHandler(h)
 logger.addHandler(handler)
 logger.addHandler(file_handler)
 
@@ -99,14 +114,8 @@ async def add_request_id(request: Request, call_next):
     if not request_id:
         request_id = str(uuid.uuid4())
     
-    # Add request_id to log record
-    extra = {'request_id': request_id}
-    old_factory = logging.getLogRecordFactory()
-    def record_factory(*args, **kwargs):
-        record = old_factory(*args, **kwargs)
-        record.request_id = extra['request_id']
-        return record
-    logging.setLogRecordFactory(record_factory)
+    # Set the request ID in the context variable
+    request_id_var.set(request_id)
 
     response = await call_next(request)
     return response
@@ -233,14 +242,36 @@ async def webhook_audio(from_number: str, audio: UploadFile = File(...), db: Ses
     if intent in ['expense_record', 'invoice_create']:
         return await process_document(intent, asr.get('text'), from_number, db, current_user)
     elif intent == 'gst_query':
-        prompt = f"Answer GST question concisely for SME owner: {asr.get('text')}"
         try:
-            resp = requests.post(settings.HF_URL, json={'prompt': prompt, 'max_new_tokens': 150})
+            # 1. Retrieve context from RAG service
+            rag_resp = requests.post(settings.RAG_URL, json={'query': asr.get('text')})
+            rag_resp.raise_for_status()
+            context = rag_resp.json().get('context', '')
+            
+            # 2. Augment the prompt with the retrieved context
+            prompt = f"""Based on the following context, please answer the question.
+CONTEXT:
+{context}
+
+QUESTION:
+{asr.get('text')}
+"""
+            # 3. Call the LLM with the augmented prompt
+            resp = requests.post(settings.HF_URL, json={'prompt': prompt, 'max_new_tokens': 250})
             resp.raise_for_status()
             whatsapp.send_text(from_number, resp.json().get('text',''))
         except requests.exceptions.RequestException as e:
-            logging.error(f"HF server unavailable: {e}")
-            raise HTTPException(status_code=503, detail=f"HF server unavailable: {e}")
+            logging.error(f"Could not connect to a required service: {e}")
+            # Fallback to a simpler prompt if RAG or HF fails
+            prompt = f"Answer GST question concisely for SME owner: {asr.get('text')}"
+            try:
+                resp = requests.post(settings.HF_URL, json={'prompt': prompt, 'max_new_tokens': 150})
+                resp.raise_for_status()
+                whatsapp.send_text(from_number, resp.json().get('text',''))
+            except requests.exceptions.RequestException as e_inner:
+                 logging.error(f"HF server unavailable: {e_inner}")
+                 raise HTTPException(status_code=503, detail=f"HF server unavailable: {e_inner}")
+
         return {'status': 'ok'}
 
     else:
@@ -270,14 +301,35 @@ async def webhook_text(message: TextMessage, db: Session = Depends(get_db), curr
     if intent in ['expense_record', 'invoice_create']:
         return await process_document(intent, message.text, current_user.email, db, current_user)
     elif intent == 'gst_query':
-        prompt = f"Answer GST question concisely for SME owner: {message.text}"
         try:
-            resp = requests.post(settings.HF_URL, json={'prompt': prompt, 'max_new_tokens': 150})
+            # 1. Retrieve context from RAG service
+            rag_resp = requests.post(settings.RAG_URL, json={'query': message.text})
+            rag_resp.raise_for_status()
+            context = rag_resp.json().get('context', '')
+            
+            # 2. Augment the prompt with the retrieved context
+            prompt = f"""Based on the following context, please answer the question.
+CONTEXT:
+{context}
+
+QUESTION:
+{message.text}
+"""
+            # 3. Call the LLM with the augmented prompt
+            resp = requests.post(settings.HF_URL, json={'prompt': prompt, 'max_new_tokens': 250})
             resp.raise_for_status()
             return {"text": resp.json().get('text','')}
         except requests.exceptions.RequestException as e:
-            logging.error(f"HF server unavailable: {e}")
-            raise HTTPException(status_code=503, detail=f"HF server unavailable: {e}")
+            logging.error(f"Could not connect to a required service: {e}")
+            # Fallback to a simpler prompt if RAG or HF fails
+            prompt = f"Answer GST question concisely for SME owner: {message.text}"
+            try:
+                resp = requests.post(settings.HF_URL, json={'prompt': prompt, 'max_new_tokens': 150})
+                resp.raise_for_status()
+                return {"text": resp.json().get('text','')}
+            except requests.exceptions.RequestException as e_inner:
+                logging.error(f"HF server unavailable: {e_inner}")
+                raise HTTPException(status_code=503, detail=f"HF server unavailable: {e_inner}")
     else:
         return {"text": "Sorry, I didn't understand. Can you repeat in short?"}
 
@@ -300,51 +352,67 @@ async def health_check():
         except requests.exceptions.RequestException:
             service_status[service_name] = "unavailable"
         return service_status
+@app.post("/expenses/confirm_ocr", response_model=schemas.Expense)
+def confirm_ocr_expense(
+    expense_data: schemas.ExpenseCreate,
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(get_current_user)
+):
+    """
+    Confirms and saves an expense record from OCR data.
+    """
+    return crud.create_expense(db=db, expense=expense_data, user_id=current_user.id)
+
+
+@app.get("/summary/monthly")
+async def get_monthly_summary(
+    db: Session = Depends(get_db),
+    current_user: schemas.User = Depends(get_current_user)
+):
+    """
+    Provides a summary of expenses for the current month.
+    """
+    # Get the first and last day of the current month
+    today = date.today()
+    first_day = today.replace(day=1)
+    last_day = (first_day + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+
+    # Fetch expenses for the current user for the current month
+    expenses = crud.get_expenses_by_date_range(db, user_id=current_user.id, start_date=first_day, end_date=last_day)
+
+    total_spend = sum(exp.amount for exp in expenses)
     
-    
-    @app.post('/webhook/image')
-    async def webhook_image(image: UploadFile = File(...), current_user: schemas.User = Depends(get_current_user)):
-        logging.info(f"Received image from {current_user.email}")
-    
-        if not ocr_reader:
-            raise HTTPException(status_code=503, detail="OCR service is not available.")
-    
-        try:
-            image_bytes = await image.read()
+    # A simple way to get top vendors
+    vendor_counts = {}
+    for exp in expenses:
+        vendor_counts[exp.item] = vendor_counts.get(exp.item, 0) + 1
+    top_vendors = sorted(vendor_counts, key=vendor_counts.get, reverse=True)[:3]
+
+    # Assuming a flat 18% GST for simplicity
+    gst_input = total_spend * 0.18
+
+    # A simple category breakdown
+    # This can be improved with a more sophisticated categorization logic
+    category_breakdown = {}
+    for exp in expenses:
+        # Simple categorization based on item name
+        category = "Other"
+        if "food" in exp.item.lower() or "zomato" in exp.item.lower() or "swiggy" in exp.item.lower():
+            category = "🍔 Food"
+        elif "fuel" in exp.item.lower() or "oil" in exp.item.lower():
+            category = "⛽ Fuel"
+        elif "shopping" in exp.item.lower():
+            category = "🛍️ Shopping"
             
-            # Use EasyOCR to read text
-            ocr_results = ocr_reader.readtext(image_bytes, detail=0, paragraph=True)
-            ocr_text = " ".join(ocr_results)
-            
-            logging.info(f"OCR Extracted Text: {ocr_text}")
-    
-            # Now, use the LLM to extract structured data from the OCR text
-            prompt = f"From the following OCR text from a receipt, extract a JSON object with keys 'Total Amount', 'Vendor', and 'Date'. OCR TEXT: {ocr_text}"
-            
-            resp = requests.post(settings.HF_URL, json={'prompt': prompt, 'max_new_tokens': 150})
-            resp.raise_for_status()
-            llm_text = resp.json().get('text', '{}')
-            
-            # Basic parsing of the LLM output to find the JSON
-            try:
-                json_start = llm_text.index('{')
-                json_end = llm_text.rindex('}') + 1
-                json_str = llm_text[json_start:json_end]
-                extracted_data = json.loads(json_str)
-            except (ValueError, json.JSONDecodeError):
-                logging.error(f"Could not parse JSON from LLM response: {llm_text}")
-                # Attempt to reformat if parsing fails
-                reformat_prompt = f"Reformat the following text into a valid JSON object only: {llm_text}"
-                rr = requests.post(settings.HF_URL, json={'prompt': reformat_prompt, 'max_new_tokens': 120})
-                rr.raise_for_status()
-                reformatted_text = rr.json().get('text', '{}')
-                extracted_data = json.loads(reformatted_text)
-    
-            return extracted_data
-    
-        except Exception as e:
-            logging.error(f"Error processing image: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to process image: {e}")
+        category_breakdown[category] = category_breakdown.get(category, 0) + exp.amount
+
+    return {
+        "title": f"Monthly Summary for {today.strftime('%B %Y')}",
+        "totalSpend": f"₹{total_spend:,.2f}",
+        "topVendors": top_vendors,
+        "gstInput": f"₹{gst_input:,.2f}",
+        "categoryBreakdown": {k: f"₹{v:,.2f}" for k, v in category_breakdown.items()},
+    }
     
     
     # Users
