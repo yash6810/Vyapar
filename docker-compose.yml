@@ -6,14 +6,33 @@ services:
       dockerfile: backend/Dockerfile
     ports:
       - "8000:8000"
-    volumes:
-      - ./vyapar.db:/app/vyapar.db
     restart: always
+    environment:
+      - SECRET_KEY=your-secret-key-in-env-file # TODO: Replace with a real secret in a .env file
+      - MYSQL_HOST=db
+      - MYSQL_USER=vyapar
+      - MYSQL_PASSWORD=vyapar_password
+      - MYSQL_DB=vyapar
     depends_on:
+      - db
       - asr
       - intent
       - hf
       - rag
+  db:
+    image: mysql:8.0
+    cap_add:
+      - SYS_NICE
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD=root_password
+      - MYSQL_DATABASE=vyapar
+      - MYSQL_USER=vyapar
+      - MYSQL_PASSWORD=vyapar_password
+    ports:
+      - "3307:3306"
+    volumes:
+      - db_data:/var/lib/mysql
   asr:
     build:
       context: .
@@ -44,3 +63,5 @@ services:
     ports:
       - "8003:8003"
     restart: always
+volumes:
+  db_data:

@@ -20,3 +20,6 @@ backend.log
 
 # Reference clone folder
 vyaparai_whatsapp_clone/
+
+# Env file
+.env
