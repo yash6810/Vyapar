@@ -1,128 +1,150 @@
-# WhatsApp ARIA — Dev Repo (with Expense Recording)
+# VYAPAR - WhatsApp AI Assistant for Indian SMEs
 
-This repo contains the dev skeleton for a WhatsApp-based AI assistant for Indian SMEs. It uses Gemini CLI for prompt/agent design and local Hugging Face + ASR servers for inference.
+This repository contains the development skeleton for a WhatsApp-based AI assistant designed for Indian Small and Medium-sized Enterprises (SMEs). It leverages the Gemini CLI for prompt and agent design, and local Hugging Face (HF) and Automatic Speech Recognition (ASR) servers for inference, enabling a powerful and cost-effective solution.
 
-## Prereqs
-- Python 3.10+
-- git
-- Node + npm (for Gemini CLI)
-- `pip install -r requirements.txt` (which includes `python-dateutil`)
-- Optional: GPU + CUDA if you plan to run larger HF models
+## Features
+
+*   **WhatsApp Integration:** Designed to connect with the WhatsApp Business Cloud API for seamless communication.
+*   **AI-Powered Assistant:** Utilizes local language models for intent classification and intelligent responses.
+*   **Expense Recording:** Allows users to record expenses via audio messages, processed by the ASR service and classified by the LLM.
+*   **Invoice Management:** Supports recording and retrieval of invoices.
+*   **Flexible Date Parsing:** Handles various date formats for expense and invoice entries.
+*   **Comprehensive Summaries:** Provides endpoints for retrieving daily, monthly, and yearly summaries of expenses and invoices.
+*   **Tagging Functionality:** Enables tagging for expenses and invoices for better organization.
+*   **Local Inference:** Uses local Hugging Face models and open-source ASR to minimize API costs.
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed:
+
+*   Python 3.10+
+*   git
+*   Node.js and npm (for Gemini CLI)
+*   Optional: GPU + CUDA (if you plan to run larger Hugging Face models)
 
 ## Setup
-1. Clone repo
-2. Create venv and install deps:
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-3. (Optional) set HF_MODEL env var to a model that fits your machine:
-```bash
-export HF_MODEL=google/gemma-text-small-it
-```
+
+1.  **Clone the repository:**
+    ```bash
+    git clone <repository_url> # Replace <repository_url> with the actual URL
+    cd Vyapar
+    ```
+2.  **Create a Python virtual environment and install dependencies:**
+    ```bash
+    python -m venv .venv
+    source .venv/bin/activate # On Windows, use `.\.venv\Scripts\activate`
+    pip install -r requirements.txt
+    ```
+    (The `requirements.txt` includes `python-dateutil` and other necessary packages.)
+3.  **Optional: Set Hugging Face model environment variable:**
+    You can specify a smaller model to fit your machine's resources.
+    ```bash
+    export HF_MODEL=google/gemma-text-small-it
+    ```
 
 ## Production Configuration (Optional)
-To connect to the WhatsApp Business Cloud API, you will need to set the following environment variables:
-- `WHATSAPP_API_KEY`: Your WhatsApp Cloud API token.
-- `WHATSAPP_PHONE_NUMBER_ID`: The ID of the phone number you are sending from.
 
-## Run order (dev)
-Open four terminals (or use tmux):
-1. Start HF server:
-```bash
-python backend/hf_server.py
-```
-2. Start ASR service:
-```bash
-python backend/asr_service.py
-```
-3. Start Intent Classifier service:
-```bash
-python backend/intent_classifier.py
-```
-4. Start backend webhook service:
-```bash
-uvicorn backend.main:app --reload --port 8000
-```
-5. (Optional) Start Gemini CLI with agent config:
-```bash
-cd gemini
-gemini --config gemini_agent.yaml
-```
+To connect to the WhatsApp Business Cloud API, you need to set the following environment variables:
 
-## Test Expense Recording flow
-Use curl or Postman to POST an audio file to the webhook. The ASR service now supports `.mp3`, `.wav`, `.ogg`, and `.flac` formats.
+*   `WHATSAPP_API_KEY`: Your WhatsApp Cloud API token.
+*   `WHATSAPP_PHONE_NUMBER_ID`: The ID of the phone number you are sending from.
+
+## Running in Development
+
+Open four separate terminals (or use `tmux` for convenience) and run the following commands:
+
+1.  **Start the Hugging Face server:**
+    ```bash
+    python backend/hf_server.py
+    ```
+2.  **Start the ASR service:**
+    ```bash
+    python backend/asr_service.py
+    ```
+3.  **Start the Intent Classifier service:**
+    ```bash
+    python backend/intent_classifier.py
+    ```
+4.  **Start the backend webhook service:**
+    ```bash
+    uvicorn backend.main:app --reload --port 8000
+    ```
+5.  **Optional: Start Gemini CLI with agent configuration:**
+    ```bash
+    cd gemini
+    gemini --config gemini_agent.yaml
+    ```
+
+## API Endpoints and Usage
+
+The backend service exposes several endpoints for interacting with the system.
+
+### Test Expense Recording Flow
+
+You can test the expense recording by POSTing an audio file to the webhook. The ASR service supports `.mp3`, `.wav`, `.ogg`, and `.flac` formats.
+
 ```bash
 curl -X POST "http://localhost:8000/webhook/audio?from_number=%2B911234567890" -F "audio=@tests/samples/expense_hindi_01.mp3"
 ```
-You should see the ASR text printed and a response indicating expense recorded (if the LLM returned valid JSON).
+You should see the ASR text printed and a response indicating the expense was recorded (if the LLM returned valid JSON).
 
-## Get Expenses
-You can retrieve expenses for a specific date range by making a GET request to the `/expenses` endpoint. The `start_date` and `end_date` query parameters can be used to filter the expenses. The date format is `YYYY-MM-DD`.
+### Retrieve Expenses
 
-Example:
+Retrieve expenses for a specific date range. The `start_date` and `end_date` query parameters use the `YYYY-MM-DD` format.
+
 ```bash
 curl -X GET "http://localhost:8000/expenses?start_date=2025-11-20&end_date=2025-11-21"
 ```
 
-## Get Invoices
-You can retrieve invoices for a specific date range by making a GET request to the `/invoices` endpoint. The `start_date` and `end_date` query parameters can be used to filter the invoices. The date format is `YYYY-MM-DD`.
+### Retrieve Invoices
 
-Example:
+Retrieve invoices for a specific date range. The `start_date` and `end_date` query parameters use the `YYYY-MM-DD` format.
+
 ```bash
 curl -X GET "http://localhost:8000/invoices?start_date=2025-11-20&end_date=2025-11-21"
 ```
 
-## Get Monthly Expense Summary
-You can retrieve a monthly summary of expenses by making a GET request to the `/expenses/summary/monthly` endpoint. The `year` and `month` query parameters can be used to filter the expenses.
+### Retrieve Monthly Expense Summary
 
-Example:
+Retrieve a monthly summary of expenses. The `year` and `month` query parameters are used for filtering.
+
 ```bash
 curl -X GET "http://localhost:8000/expenses/summary/monthly?year=2025&month=11"
 ```
 
-## Get Monthly Invoice Summary
-You can retrieve a monthly summary of invoices by making a GET request to the `/invoices/summary/monthly` endpoint. The `year` and `month` query parameters can be used to filter the invoices.
+### Retrieve Monthly Invoice Summary
 
-Example:
+Retrieve a monthly summary of invoices. The `year` and `month` query parameters are used for filtering.
+
 ```bash
 curl -X GET "http://localhost:8000/invoices/summary/monthly?year=2025&month=11"
 ```
 
-## Get Yearly Expense Summary
-You can retrieve a yearly summary of expenses by making a GET request to the `/expenses/summary/yearly` endpoint. The `year` query parameter can be used to filter the expenses.
+### Retrieve Yearly Expense Summary
 
-Example:
+Retrieve a yearly summary of expenses. The `year` query parameter is used for filtering.
+
 ```bash
 curl -X GET "http://localhost:8000/expenses/summary/yearly?year=2025"
 ```
 
-## Get Yearly Invoice Summary
-You can retrieve a yearly summary of invoices by making a GET request to the `/invoices/summary/yearly` endpoint. The `year` query parameter can be used to filter the invoices.
+### Retrieve Yearly Invoice Summary
 
-Example:
+Retrieve a yearly summary of invoices. The `year` query parameter is used for filtering.
+
 ```bash
 curl -X GET "http://localhost:8000/invoices/summary/yearly?year=2025"
 ```
 
-## Running tests
-- Add audio samples to `tests/samples` and create tests in `tests/test_end2end.py`.
-- Run `pytest -q`.
+## Running Tests
 
-## Notes on costs
-- This setup uses local models and open-source ASR; it should incur no API cost. Running large models on CPU is slow — stick to small models during dev.
+1.  Add audio samples to `tests/samples/`.
+2.  Create corresponding tests in `tests/test_end2end.py`.
+3.  Run `pytest`:
+    ```bash
+    pytest -q
+    ```
 
-## Next steps
-- **Done:** Move intent detection to the `intent_classifier` service.
-- **Done:** Replace rule-based routing with a call to a local language model. The `intent_classifier` service now uses the `hf_server` to classify intents.
-- **Done:** Prepared the `whatsapp_adapter.py` for WhatsApp Business Cloud integration. To enable, set the `WHATSAPP_API_KEY` and `WHATSAPP_PHONE_NUMBER_ID` environment variables.
-- **Done:** Added flexible date parsing for expenses. The application can now handle various date formats.
-- **Done:** Added an endpoint to retrieve expenses for a specific date range.
-- **Done:** Refactored the document processing logic to be more generic and extensible.
-- **Done:** Added an endpoint to retrieve invoices for a specific date range.
-- **Done:** Added an endpoint to retrieve a monthly summary of expenses.
-- **Done:** Added an endpoint to retrieve a monthly summary of invoices.
-- **Done:** Added an endpoint to retrieve a yearly summary of expenses.
-- **Done:** Added an endpoint to retrieve a yearly summary of invoices.
-- **Done:** Added tagging functionality for expenses and invoices.
+## Notes on Costs
+
+This setup utilizes local models and open-source ASR, which should incur no API costs. Running large models on a CPU can be slow; it is recommended to stick to smaller models during development.
