@@ -1,294 +1,268 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
-import { message } from 'antd';
-import { PaperClipOutlined, LogoutOutlined, AudioOutlined, SendOutlined } from '@ant-design/icons';
-import SummaryCard from './SummaryCard';
+import { useNavigate } from 'react-router-dom';
+import api from '../api';
 import './Chat.css';
 
-function Chat({ handleLogout }) {
+const QUICK_ACTIONS = [
+  '📸 Upload Bill',
+  '📊 Monthly Summary',
+  '🧾 GST Help',
+  '📋 Dashboard',
+];
+
+export default function Chat({ handleLogout }) {
   const [messages, setMessages] = useState([
-    { type: 'text', text: 'Hello! How can I help you today?', sender: 'bot' },
+    { type: 'text', text: 'Welcome to Vyapar AI! 🙏\n\nI can help you:\n• Record expenses (type or upload bills)\n• Create invoices\n• Answer GST questions\n• Show summaries\n\nTry saying: "Paid ₹500 to Sharma Store for groceries"', sender: 'bot', time: new Date() },
   ]);
-  const [inputValue, setInputValue] = useState('');
-  const [menuVisible, setMenuVisible] = useState(false);
+  const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const token = localStorage.getItem('token');
+  const [isRecording, setIsRecording] = useState(false);
+  const [recognition, setRecognition] = useState(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  const navigate = useNavigate();
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
+  // Scroll to bottom on new messages
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  const menuOptions = [
-    '📸 Upload Bill',
-    '🎤 Voice Expense',
-    '📊 Monthly Summary',
-    '🧾 GST Inputs',
-    '❓ Help',
-  ];
+  // Initialize Web Speech API for voice (free, client-side)
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const rec = new SpeechRecognition();
+      rec.continuous = false;
+      rec.interimResults = false;
+      rec.lang = 'hi-IN'; // Hindi + English
+      rec.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setInput(transcript);
+        setIsRecording(false);
+        // Auto-send after speech recognition
+        handleSendText(transcript);
+      };
+      rec.onerror = () => setIsRecording(false);
+      rec.onend = () => setIsRecording(false);
+      setRecognition(rec);
+    }
+  }, []); // eslint-disable-line
 
-  const handleSendMessage = async (text) => {
-    if (text.trim()) {
-      const userMessage = { type: 'text', text, sender: 'user' };
-      setMessages((prevMessages) => [...prevMessages, userMessage]);
-      setInputValue('');
-      
-      if (text === '📊 Monthly Summary') {
-        setIsTyping(true);
-        setTimeout(() => {
-          const summaryData = {
-            title: 'Monthly Summary for November 2025',
-            totalSpend: '₹12,540.00',
-            topVendors: ['Zomato', 'Swiggy', 'Indian Oil'],
-            gstInput: '₹1,881.00',
-            categoryBreakdown: {
-              '🍔 Food': '₹4,500.00',
-              '⛽ Fuel': '₹3,000.00',
-              '🛍️ Shopping': '₹5,040.00',
-            },
-          };
-          const botMessage = { type: 'summary_card', data: summaryData, sender: 'bot' };
-          setMessages((prevMessages) => [...prevMessages, botMessage]);
-          setIsTyping(false);
-        }, 1000);
-        return;
+  const addMessage = (msg) => setMessages(prev => [...prev, { ...msg, time: new Date() }]);
+
+  const handleSendText = async (text) => {
+    if (!text?.trim()) return;
+    const trimmed = text.trim();
+    setInput('');
+
+    // Handle special quick actions
+    if (trimmed === '📋 Dashboard') {
+      navigate('/dashboard');
+      return;
+    }
+    if (trimmed === '📸 Upload Bill') {
+      fileInputRef.current?.click();
+      return;
+    }
+
+    addMessage({ type: 'text', text: trimmed, sender: 'user' });
+    setIsTyping(true);
+
+    try {
+      const response = await api.post('/api/webhook/text', { text: trimmed });
+      const data = response.data;
+
+      if (data.data && (data.data.by_category || data.data.expense_count !== undefined)) {
+        addMessage({ type: 'summary', data: data.data, text: data.message, sender: 'bot' });
+      } else if (data.data?.needs_confirmation) {
+        addMessage({ type: 'confirmation', data: data.data, text: data.message, sender: 'bot' });
+      } else {
+        addMessage({ type: 'text', text: data.message, sender: 'bot' });
       }
-
-      setIsTyping(true);
-      try {
-        const response = await axios.post(
-          '/webhook/text',
-          { text },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        const botMessage = { type: 'text', text: response.data.text, sender: 'bot' };
-        setMessages((prevMessages) => [...prevMessages, botMessage]);
-      } catch (error) {
-        console.error("Failed to send message:", error);
-        if (error.response) {
-          if (error.response.status === 401) {
-            message.error('Authentication failed. Please log in again.');
-          } else if (error.response.status === 503) {
-            message.error('A required service is unavailable. Please try again later.');
-          } else {
-            message.error(`Server error: ${error.response.status}. Please try again.`);
-          }
-        } else if (error.request) {
-          message.error('Network error. Could not connect to the server.');
-        } else {
-          message.error('An unexpected error occurred. Please try again.');
-        }
-      } finally {
-        setIsTyping(false);
-      }
+    } catch (err) {
+      const errMsg = err.response?.status === 503
+        ? '⚠️ AI service temporarily unavailable. Please try again.'
+        : '❌ Something went wrong. Please try again.';
+      addMessage({ type: 'text', text: errMsg, sender: 'bot' });
+    } finally {
+      setIsTyping(false);
     }
   };
 
-  const handleInputChange = (e) => {
-    setInputValue(e.target.value);
-    if (e.target.value.trim() !== '') {
-      setMenuVisible(false);
-    }
-  };
-  
-  const handleMenuOptionClick = (option) => {
-    if (option === '📸 Upload Bill') {
-      fileInputRef.current.click();
-    } else if (option === '🎤 Voice Expense') {
-        handleSendMessage(option)
-    } 
-    else {
-      handleSendMessage(option);
-    }
-    setMenuVisible(false);
-  };
-
-  const handleImageUpload = async (event) => {
-    const file = event.target.files[0];
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
     if (!file) return;
 
+    // Show preview
     const reader = new FileReader();
-    reader.onload = (e) => {
-      const imageMessage = {
-        type: 'image',
-        src: e.target.result,
-        sender: 'user',
-      };
-      setMessages((prevMessages) => [...prevMessages, imageMessage]);
-    };
+    reader.onload = (ev) => addMessage({ type: 'image', src: ev.target.result, sender: 'user' });
     reader.readAsDataURL(file);
 
     setIsTyping(true);
-    const formData = new FormData();
-    formData.append('image', file);
-
     try {
-      const response = await axios.post('/webhook/image', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          Authorization: `Bearer ${token}`,
-        },
+      const formData = new FormData();
+      formData.append('image', file);
+      const response = await api.post('/api/webhook/image', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
-      
-      const confirmationMessage = {
-          type: 'confirmation',
-          data: response.data,
-          sender: 'bot'
-      };
-      setMessages((prevMessages) => [...prevMessages, confirmationMessage]);
-
-    } catch (error) {
-      console.error("Failed to process image:", error);
-      if (error.response) {
-        if (error.response.status === 401) {
-          message.error('Authentication failed. Please log in again.');
-        } else if (error.response.status === 503) {
-          message.error('An image processing service is unavailable. Please try again later.');
-        } else {
-          message.error(`Server error: ${error.response.status}. Failed to process image.`);
-        }
-      } else if (error.request) {
-        message.error('Network error. Could not connect to the server.');
-      } else {
-        message.error('An unexpected error occurred while uploading the image.');
-      }
+      addMessage({ type: 'confirmation', data: response.data.data, text: response.data.message, sender: 'bot' });
+    } catch (err) {
+      addMessage({ type: 'text', text: '❌ Failed to process image. Please try again.', sender: 'bot' });
     } finally {
       setIsTyping(false);
-      // Reset file input
-      event.target.value = null;
+      e.target.value = null;
     }
   };
 
-  const handleConfirmation = (action) => {
-    setMessages(messages.filter(m => m.type !== 'confirmation'));
-
-    const responseText = action === 'confirm' ? '✅ Expense confirmed and recorded.' : '❌ Action cancelled.';
-    const botMessage = { type: 'text', text: responseText, sender: 'bot' };
-    setMessages((prevMessages) => [...prevMessages, botMessage]);
+  const handleConfirm = async (expenseData) => {
+    setIsTyping(true);
+    try {
+      const response = await api.post('/api/webhook/image/confirm', expenseData);
+      addMessage({ type: 'text', text: response.data.message, sender: 'bot' });
+    } catch {
+      addMessage({ type: 'text', text: '❌ Failed to save expense.', sender: 'bot' });
+    } finally {
+      setIsTyping(false);
+    }
   };
 
-  const renderMessage = (msg, index) => {
+  const toggleRecording = () => {
+    if (!recognition) {
+      addMessage({ type: 'text', text: '⚠️ Voice input is not supported in this browser. Please use Chrome.', sender: 'bot' });
+      return;
+    }
+    if (isRecording) {
+      recognition.stop();
+    } else {
+      recognition.start();
+      setIsRecording(true);
+    }
+  };
+
+  const formatTime = (d) => {
+    if (!d) return '';
+    return new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const renderMessage = (msg, i) => {
+    const timeStr = formatTime(msg.time);
     switch (msg.type) {
-      case 'summary_card':
-        return (
-          <div key={index} className={`message ${msg.sender}`}>
-            <SummaryCard data={msg.data} />
-          </div>
-        );
       case 'image':
         return (
-          <div key={index} className={`message ${msg.sender}`}>
-            <img src={msg.src} alt="Uploaded bill" className="message-image" />
+          <div key={i} className={`message ${msg.sender}`}>
+            <div className="msg-image"><img src={msg.src} alt="Uploaded" /></div>
+            <div className="msg-time">{timeStr}</div>
           </div>
         );
       case 'confirmation':
+        const preview = msg.data?.expense_preview || msg.data?.extracted || {};
         return (
-            <div key={index} className={`message ${msg.sender}`}>
-                <div className="confirmation-card">
-                    <div className="confirmation-header">Extracted Data</div>
-                    <div className="confirmation-body">
-                        {Object.entries(msg.data).map(([key, value]) => (
-                            <div key={key} className="confirmation-item">
-                                <span className="confirmation-label">{key}:</span>
-                                <span className="confirmation-value">{value}</span>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="confirmation-buttons">
-                        <button onClick={() => handleConfirmation('confirm')}>Confirm</button>
-                        <button onClick={() => handleConfirmation('retry')}>Retry</button>
-                    </div>
-                </div>
+          <div key={i} className={`message ${msg.sender}`}>
+            <div className="confirm-card">
+              <div className="confirm-card-header">📸 Extracted Data</div>
+              <div className="confirm-card-body">
+                {Object.entries(preview).filter(([k]) => !['source','gst_applicable','notes','currency'].includes(k)).map(([k, v]) => (
+                  <div key={k} className="confirm-row">
+                    <span className="label">{k.replace(/_/g, ' ')}</span>
+                    <span className="value">{typeof v === 'number' ? `₹${v.toLocaleString()}` : String(v)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="confirm-card-actions">
+                <button onClick={() => handleConfirm(msg.data.expense_preview)}>✅ Confirm</button>
+                <button onClick={() => addMessage({ type: 'text', text: 'Cancelled.', sender: 'bot' })}>❌ Cancel</button>
+              </div>
             </div>
+            <div className="msg-time">{timeStr}</div>
+          </div>
+        );
+      case 'summary':
+        const s = msg.data || {};
+        return (
+          <div key={i} className={`message ${msg.sender}`}>
+            <div className="summary-card">
+              <div className="summary-card-header">📊 {s.period || 'Summary'}</div>
+              <div className="summary-card-body">
+                <div className="summary-stat"><span className="label">Total Spent</span><span className="value highlight">₹{(s.total_amount || 0).toLocaleString()}</span></div>
+                <div className="summary-stat"><span className="label">Expenses</span><span className="value">{s.expense_count || 0}</span></div>
+                <div className="summary-stat"><span className="label">GST Input</span><span className="value">₹{(s.gst_total || 0).toLocaleString()}</span></div>
+                {s.top_vendors?.length > 0 && (
+                  <div className="summary-stat"><span className="label">Top Vendors</span><span className="value">{s.top_vendors.join(', ')}</span></div>
+                )}
+                {s.by_category && Object.keys(s.by_category).length > 0 && (
+                  <>
+                    <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '4px 0' }} />
+                    {Object.entries(s.by_category).map(([cat, amt]) => (
+                      <div key={cat} className="summary-stat">
+                        <span className="label">{cat}</span>
+                        <span className="value">₹{amt.toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="msg-time">{timeStr}</div>
+          </div>
         );
       default:
         return (
-          <div key={index} className={`message ${msg.sender}`}>
-            {msg.text}
+          <div key={i} className={`message ${msg.sender}`}>
+            <div className="msg-bubble">{msg.text}</div>
+            <div className="msg-time">{timeStr}</div>
           </div>
         );
     }
   };
 
   return (
-    <div className="chat-container">
+    <div className="chat-page">
       <div className="chat-header">
-        <h3>Vyapar Bot</h3>
-        <button onClick={handleLogout} className="logout-button">
-          <LogoutOutlined />
-        </button>
-      </div>
-      <div className="chat-messages">
-        {messages.map((msg, index) => renderMessage(msg, index))}
-        {isTyping && (
-          <div className="message bot typing-indicator">
-            <span></span><span></span><span></span>
+        <div className="chat-header-left">
+          <div className="chat-avatar">V</div>
+          <div className="chat-header-info">
+            <h3>Vyapar AI</h3>
+            <span>● Online</span>
           </div>
-        )}
+        </div>
+        <div className="chat-header-actions">
+          <button className="header-btn" onClick={() => navigate('/dashboard')}>📊 <span>Dashboard</span></button>
+          <button className="header-btn danger" onClick={handleLogout}>↪ <span>Logout</span></button>
+        </div>
+      </div>
+
+      <div className="chat-messages">
+        {messages.map(renderMessage)}
+        {isTyping && <div className="typing"><span></span><span></span><span></span></div>}
         <div ref={messagesEndRef} />
       </div>
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleImageUpload}
-        style={{ display: 'none' }}
-        accept="image/*"
-      />
-      {menuVisible && (
-        <div className="menu-panel">
-          {menuOptions.map((option, index) => (
-            <div key={index} className="menu-option" onClick={() => handleMenuOptionClick(option)}>
-              {option}
-            </div>
-          ))}
-        </div>
-      )}
-      <div className="chat-input">
-        <button className="menu-button" onClick={() => setMenuVisible(!menuVisible)}>
-          <PaperClipOutlined />
-        </button>
-          <div className="chat-input-buttons">
-            {isRecording ? (
-                <button onClick={handleVoiceExpenseClick} className="voice-button recording">
-                    <span className="recording-dot"></span> Stop
-                </button>
-            ) : (
-            <>
-                <input
-                  type="text"
-                  value={inputValue}
-                  onChange={handleInputChange}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter' && inputValue.trim()) {
-                        handleSendMessage(inputValue);
-                    }
-                  }}
-                  placeholder="Type a message..."
-                />
-                {inputValue ? (
-                  <button className="send-button" onClick={() => {
-                      if (inputValue.trim()) {
-                          handleSendMessage(inputValue);
-                      }
-                  }}>
-                      <SendOutlined />
-                  </button>
-                ) : (
-                  <button onClick={handleVoiceExpenseClick} className="voice-button">
-                      <AudioOutlined />
-                  </button>
-                )}
-            </>
-            )}
-          </div>
-        </div>
+
+      <div className="quick-menu">
+        {QUICK_ACTIONS.map(action => (
+          <button key={action} className="quick-btn" onClick={() => handleSendText(action)}>{action}</button>
+        ))}
+      </div>
+
+      <input type="file" ref={fileInputRef} onChange={handleImageUpload} style={{ display: 'none' }} accept="image/*" />
+
+      <div className="chat-composer">
+        <button className="composer-btn attach" onClick={() => fileInputRef.current?.click()}>📎</button>
+        <input
+          className="composer-input"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSendText(input)}
+          placeholder={isRecording ? '🎤 Listening...' : 'Type a message...'}
+          disabled={isRecording}
+        />
+        {input ? (
+          <button className="composer-btn send" onClick={() => handleSendText(input)}>➤</button>
+        ) : (
+          <button className={`composer-btn mic ${isRecording ? 'recording' : ''}`} onClick={toggleRecording}>
+            {isRecording ? '⏹' : '🎤'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
-
-export default Chat;

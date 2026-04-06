@@ -1,87 +1,89 @@
 import React, { useState } from 'react';
-import { Form, Input, Button, message, Typography } from 'antd';
-import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../api';
 import './Auth.css';
 
-const { Title, Paragraph } = Typography;
-
-function Register() {
+export default function Register() {
+  const [form, setForm] = useState({ email: '', password: '', confirmPassword: '', name: '', business_name: '' });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
   const navigate = useNavigate();
 
-  const onFinish = async (values) => {
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (form.password !== form.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    if (form.password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+
     setLoading(true);
     try {
-      await axios.post('/users/', { email: values.email, password: values.password });
-      message.success('Registration successful! Please login.');
-      navigate('/login');
-    } catch (error) {
-      message.error('Registration failed: Email may already be registered.');
+      await api.post('/api/auth/register', {
+        email: form.email,
+        password: form.password,
+        name: form.name || null,
+        business_name: form.business_name || null,
+      });
+      setSuccess(true);
+      setTimeout(() => navigate('/login'), 1500);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Registration failed. Try a different email.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="auth-container">
+    <div className="auth-page">
       <div className="auth-card">
-        <Title level={2} className="auth-title">Create Account</Title>
-        <Paragraph className="auth-subtitle">Join Vyapar AI and streamline your business.</Paragraph>
-        <Form
-          name="register"
-          onFinish={onFinish}
-          className="auth-form"
-          autoComplete="off"
-        >
-          <Form.Item
-            name="email"
-            rules={[
-                { type: 'email', message: 'The input is not valid E-mail!' },
-                { required: true, message: 'Please input your E-mail!' }
-            ]}
-          >
-            <Input prefix={<UserOutlined />} placeholder="Email" />
-          </Form.Item>
+        <div className="auth-logo">
+          <div className="auth-logo-icon">₹</div>
+        </div>
+        <h1 className="auth-title text-gradient">Create Account</h1>
+        <p className="auth-subtitle">Start managing your business finances with AI</p>
 
-          <Form.Item
-            name="password"
-            rules={[{ required: true, message: 'Please input your password!' }]}
-            hasFeedback
-          >
-            <Input.Password prefix={<LockOutlined />} placeholder="Password" />
-          </Form.Item>
+        {error && <div className="auth-error">{error}</div>}
+        {success && <div className="auth-error" style={{ background: 'rgba(16,185,129,0.1)', borderColor: 'rgba(16,185,129,0.2)', color: 'var(--success)' }}>✅ Account created! Redirecting to login...</div>}
 
-          <Form.Item
-            name="confirm"
-            dependencies={['password']}
-            hasFeedback
-            rules={[
-              { required: true, message: 'Please confirm your password!' },
-              ({ getFieldValue }) => ({
-                validator(_, value) {
-                  if (!value || getFieldValue('password') === value) {
-                    return Promise.resolve();
-                  }
-                  return Promise.reject(new Error('The two passwords that you entered do not match!'));
-                },
-              }),
-            ]}
-          >
-            <Input.Password prefix={<LockOutlined />} placeholder="Confirm Password" />
-          </Form.Item>
+        <form className="auth-form" onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>Full Name</label>
+            <input type="text" name="name" className="form-input" placeholder="Rahul Sharma" value={form.name} onChange={handleChange} />
+          </div>
+          <div className="form-group">
+            <label>Business Name</label>
+            <input type="text" name="business_name" className="form-input" placeholder="Sharma Traders Pvt Ltd" value={form.business_name} onChange={handleChange} />
+          </div>
+          <div className="form-group">
+            <label>Email *</label>
+            <input type="email" name="email" className="form-input" placeholder="you@business.com" value={form.email} onChange={handleChange} required autoFocus />
+          </div>
+          <div className="form-group">
+            <label>Password *</label>
+            <input type="password" name="password" className="form-input" placeholder="Min 6 characters" value={form.password} onChange={handleChange} required />
+          </div>
+          <div className="form-group">
+            <label>Confirm Password *</label>
+            <input type="password" name="confirmPassword" className="form-input" placeholder="••••••••" value={form.confirmPassword} onChange={handleChange} required />
+          </div>
+          <button type="submit" className="auth-btn" disabled={loading || success}>
+            {loading ? 'Creating Account...' : 'Create Account'}
+          </button>
+        </form>
 
-          <Form.Item>
-            <Button type="primary" htmlType="submit" loading={loading} className="auth-button">
-              Register
-            </Button>
-          </Form.Item>
-          <Link to="/login" className="auth-link">Already have an account? Login</Link>
-        </Form>
+        <p className="auth-link">
+          Already have an account? <Link to="/login">Sign in</Link>
+        </p>
       </div>
     </div>
   );
 }
-
-export default Register;

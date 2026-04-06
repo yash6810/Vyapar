@@ -1,23 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Link, useNavigate } from 'react-router-dom';
-import { ConfigProvider, theme } from 'antd';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import Login from './components/Login';
 import Register from './components/Register';
 import Chat from './components/Chat';
+import Dashboard from './components/Dashboard';
 import './App.css';
 
-function App() {
+function ProtectedRoute({ children, token }) {
+  if (!token) return <Navigate to="/login" replace />;
+  return children;
+}
+
+function AppRoutes() {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Only redirect if the current path is not login or register
-    if (token && (window.location.pathname === '/login' || window.location.pathname === '/register' || window.location.pathname === '/')) {
-      navigate('/chat');
-    } else if (!token && window.location.pathname !== '/register') {
-      navigate('/login');
-    }
-  }, [token, navigate]);
+    const handleStorage = () => setToken(localStorage.getItem('token'));
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -26,25 +28,34 @@ function App() {
   };
 
   return (
-    <ConfigProvider theme={{ algorithm: theme.darkAlgorithm }}>
-      <div className="App">
-        <Routes>
-          <Route path="/login" element={<Login setToken={setToken} />} />
-          <Route path="/register" element={<Register />} />
-          {token && <Route path="/chat" element={<Chat handleLogout={handleLogout} />} />}
-          <Route path="/" element={token ? <Chat handleLogout={handleLogout} /> : <Login setToken={setToken} />} />
-        </Routes>
-      </div>
-    </ConfigProvider>
+    <div className="App">
+      <Routes>
+        <Route path="/login" element={
+          token ? <Navigate to="/chat" replace /> : <Login setToken={setToken} />
+        } />
+        <Route path="/register" element={
+          token ? <Navigate to="/chat" replace /> : <Register />
+        } />
+        <Route path="/chat" element={
+          <ProtectedRoute token={token}>
+            <Chat handleLogout={handleLogout} />
+          </ProtectedRoute>
+        } />
+        <Route path="/dashboard" element={
+          <ProtectedRoute token={token}>
+            <Dashboard handleLogout={handleLogout} />
+          </ProtectedRoute>
+        } />
+        <Route path="/" element={<Navigate to={token ? "/chat" : "/login"} replace />} />
+      </Routes>
+    </div>
   );
 }
 
-function AppWrapper() {
+export default function App() {
   return (
     <BrowserRouter>
-      <App />
+      <AppRoutes />
     </BrowserRouter>
   );
 }
-
-export default AppWrapper;
