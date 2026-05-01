@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     # Gemini API (free tier: 15 RPM for pro, 60 RPM for flash)
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-2.0-flash"
+    GEMINI_MODEL: str = "gemini-1.5-flash"
 
     # CORS
     FRONTEND_URL: str = "http://localhost:3000"

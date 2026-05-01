@@ -71,7 +71,7 @@ Respond with ONLY the intent label, nothing else."""
             return "fallback"
         return intent
     except Exception as e:
-        logger.error(f"Intent classification failed: {e}")
+        logger.error(f"Intent classification failed: {type(e).__name__}: {e}")
         return "fallback"
 
 
