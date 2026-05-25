@@ -1,0 +1,3 @@
+[submodule "Vyapar-RL"]
+	path = Vyapar-RL
+	url = https://github.com/yash6810/Vyapar-RL.git
