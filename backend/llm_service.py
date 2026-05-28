@@ -11,6 +11,14 @@ from datetime import date
 
 import google.generativeai as genai
 from .config import settings
+import sys
+import os
+try:
+    sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "Vyapar-RL"))
+    from gst_rules import get_expected_slab
+except ImportError:
+    def get_expected_slab(description: str) -> int:
+        return 18
 
 logger = logging.getLogger(__name__)
 
@@ -139,9 +147,16 @@ Return ONLY a valid JSON object with these fields:
         data.setdefault("customer_name", "Unknown")
         data.setdefault("amount", 0)
         data.setdefault("gst_rate", 18.0)
-        # Calculate GST
+        # Calculate GST using Vyapar-RL rules
         amount = float(data.get("amount", 0))
-        gst_rate = float(data.get("gst_rate", 18.0))
+        description = data.get("description", "")
+        # Use RL rules to find the correct slab, otherwise fallback to LLM's rate
+        expected_slab = get_expected_slab(description)
+        gst_rate = float(data.get("gst_rate", expected_slab))
+        if gst_rate == 18.0 and expected_slab != 18:
+            gst_rate = float(expected_slab) # Override LLM default if rule matches
+            data["gst_rate"] = gst_rate
+
         data["gst_amount"] = round(amount * gst_rate / 100, 2)
         data["total_amount"] = round(amount + data["gst_amount"], 2)
         return data
